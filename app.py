@@ -1,44 +1,104 @@
+"""Local-first reporting prototype. No reports are sent to an organization."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import json, os
-PROJECT = json.loads(Path(__file__).with_name("project.json").read_text())
-def respond(value):
-    kind = PROJECT["slug"]
-    text = str(value).lower()
-    if kind == "linda-mtoto":
-        urgent = any(w in text for w in ["threat", "blackmail", "demanding photos"])
-        return {"mode": "Rules-based prototype; fictional examples only", "priority": "Seek trusted support promptly" if urgent else "Review and plan", "steps": ["Move to a safe place and speak to a trusted person.", "Preserve evidence only when safe; avoid forwarding private images.", "Use the platform reporting and blocking tools.", "Contact a verified local support service."], "stored": False}
-    if kind == "agrof-vision":
-        data = json.loads(value)
-        brightness, blur, coverage = float(data["brightness"]), float(data["blur_score"]), float(data["leaf_coverage"])
-        if not 0 <= brightness <= 255 or blur < 0 or not 0 <= coverage <= 1: raise ValueError("Measurements are out of range")
-        issues = []
-        if brightness < 45 or brightness > 225: issues.append("Adjust lighting")
-        if blur < 70: issues.append("Retake with steadier focus")
-        if coverage < .25: issues.append("Move closer to the leaf")
-        return {"mode": "Quality-gate prototype using supplied measurements; no image model yet", "ready_for_analysis": not issues, "issues": issues, "diagnosis": "Not performed"}
-    if kind == "sqoop-merchant":
-        data = json.loads(value)
-        stores, users, orders = (int(data[k]) for k in ["stores", "users", "orders"])
-        if min(stores, users) < 1 or orders < 0: raise ValueError("Stores/users must be positive and orders nonnegative")
-        monthly = 25000 + max(stores-1,0)*10000 + max(users-3,0)*3000 + max(orders-100,0)*100
-        return {"mode": "Demo quote; no charge or payment taken", "currency": "UGX", "monthly_total": monthly, "stores": stores, "users": users, "orders": orders}
-    return {"mode": "Rules-based preparation prototype; AI integration pending", "questions": ["What would I like to discuss at this appointment?", "What changes have I noticed and when did they start?", "Which medicines or supplements should I bring a list of?", "What follow-up should I arrange?"], "note": value[:1500], "diagnosis": "Not provided", "stored": False}
+from urllib.parse import urlparse
+from datetime import datetime, timezone
+import hashlib, json, os, secrets, sqlite3
+
+ROOT = Path(__file__).resolve().parent
+DB = Path(os.getenv('LINDA_DB', str(ROOT / 'data' / 'reports.sqlite3')))
+CATEGORIES = {'harassment', 'impersonation', 'extortion', 'privacy', 'other'}
+
+def connect():
+    DB.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    db = sqlite3.connect(DB)
+    db.row_factory = sqlite3.Row
+    db.execute('CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, category TEXT NOT NULL, summary TEXT NOT NULL, evidence TEXT NOT NULL, created TEXT NOT NULL)')
+    os.chmod(DB, 0o600)
+    return db
+
+def digest(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def safety_plan(category):
+    # User-selected category; this does not predict severity or diagnose risk.
+    extra = {
+        'harassment': 'Review who can contact you and tag you on the platform.',
+        'impersonation': 'Use the platform’s impersonation report and secure your own account.',
+        'extortion': 'Speak with a trusted support person before responding to demands.',
+        'privacy': 'Review account access and remove unwanted sharing permissions when safe.',
+        'other': 'Write down what happened and choose a trusted person to help you decide next steps.'
+    }
+    return ['If you feel unsafe, seek help from a trusted person or verified local service.', 'Save dates and links only when safe. Do not upload private images here.', extra[category], 'Use the platform’s reporting and blocking options when safe.']
+
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass  # Report contents and access keys must not appear in logs.
+    def send(self, status, data):
+        raw = json.dumps(data).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers(); self.wfile.write(raw)
+    def body(self):
+        if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+            raise ValueError('Use application/json')
+        size = int(self.headers.get('Content-Length', '0'))
+        if not 0 < size <= 16000: raise ValueError('Request is too large or empty')
+        result = json.loads(self.rfile.read(size))
+        if not isinstance(result, dict): raise ValueError('JSON object required')
+        return result
+    def same_origin(self):
+        origin = self.headers.get('Origin')
+        return not origin or urlparse(origin).netloc == self.headers.get('Host')
+    def authorized(self, report_id):
+        header = self.headers.get('Authorization', '')
+        token = header[7:] if header.startswith('Bearer ') else ''
+        with connect() as db: row = db.execute('SELECT * FROM reports WHERE id=?', (report_id,)).fetchone()
+        return row if row and secrets.compare_digest(row['token_hash'], digest(token)) else None
     def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b'{"status":"ok"}'); return
-        if self.path != "/": self.send_error(404); return
-        self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.end_headers(); self.wfile.write(Path(__file__).with_name("index.html").read_bytes())
+        path = urlparse(self.path).path
+        if path == '/health': return self.send(200, {'status': 'ok'})
+        if path.startswith('/api/reports/'):
+            row = self.authorized(path.rsplit('/', 1)[-1])
+            if not row: return self.send(404, {'error': 'Report unavailable. Check your ID and access key.'})
+            result = {k: row[k] for k in ['id', 'category', 'summary', 'evidence', 'created']}
+            result['status'] = 'Saved privately on this prototype server; not sent to a support organization'
+            result['plan'] = safety_plan(row['category'])
+            return self.send(200, result)
+        if path not in ['/', '/app.js', '/styles.css']: return self.send(404, {'error': 'Not found'})
+        file = {'/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css'}[path]
+        self.send_response(200)
+        self.send_header('Content-Type', {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript', '/styles.css': 'text/css'}[path])
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers(); self.wfile.write((ROOT / file).read_bytes())
     def do_POST(self):
-        if self.path != "/api/demo": self.send_error(404); return
+        if not self.same_origin(): return self.send(403, {'error': 'Cross-origin request rejected'})
+        if self.path != '/api/reports': return self.send(404, {'error': 'Not found'})
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 10000: raise ValueError("Request must be 1-10000 bytes")
-            data = json.loads(self.rfile.read(length)); value=data.get("input", "")
-            if not isinstance(value,str) or not value.strip(): raise ValueError("Input is required")
-            result=respond(value); status=200
-        except (ValueError, KeyError, TypeError) as error: result={"error":str(error)}; status=400
-        self.send_response(status); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(json.dumps(result).encode())
-if __name__ == "__main__":
-    ThreadingHTTPServer(("127.0.0.1", int(os.getenv("PORT", "8000"))), Handler).serve_forever()
+            body = self.body()
+            category, summary, evidence = body.get('category'), body.get('summary'), body.get('evidence', '')
+            if body.get('consent') is not True: raise ValueError('Consent is required to save a report')
+            if not isinstance(category, str) or category not in CATEGORIES: raise ValueError('Choose a valid category')
+            if not isinstance(summary, str) or not 10 <= len(summary.strip()) <= 2000: raise ValueError('Summary must be 10–2000 characters')
+            if not isinstance(evidence, str) or len(evidence) > 3000: raise ValueError('Evidence notes must be at most 3000 characters')
+            report_id, token = secrets.token_urlsafe(12), secrets.token_urlsafe(32)
+            with connect() as db:
+                db.execute('INSERT INTO reports VALUES (?,?,?,?,?,?)', (report_id, digest(token), category, summary.strip(), evidence.strip(), datetime.now(timezone.utc).isoformat()))
+            return self.send(201, {'id': report_id, 'access_key': token, 'plan': safety_plan(category), 'status': 'Saved privately. No organization has received this report.'})
+        except (ValueError, TypeError) as error: return self.send(400, {'error': str(error)})
+    def do_DELETE(self):
+        if not self.same_origin(): return self.send(403, {'error': 'Cross-origin request rejected'})
+        if not self.path.startswith('/api/reports/'): return self.send(404, {'error': 'Not found'})
+        report_id = self.path.rsplit('/', 1)[-1]
+        if not self.authorized(report_id): return self.send(404, {'error': 'Report unavailable'})
+        with connect() as db: db.execute('DELETE FROM reports WHERE id=?', (report_id,))
+        self.send(200, {'deleted': True})
+
+if __name__ == '__main__':
+    with connect(): pass
+    server = ThreadingHTTPServer(('127.0.0.1', int(os.getenv('PORT', '8000'))), Handler)
+    print('Linda Mtoto: http://127.0.0.1:%s' % server.server_port)
+    server.serve_forever()
