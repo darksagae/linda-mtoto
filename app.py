@@ -4,7 +4,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 import hashlib, json, os, secrets, sqlite3
-from gateway import generate, GatewayError
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.getenv('LINDA_DB', str(ROOT / 'data' / 'reports.sqlite3')))
@@ -77,13 +76,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write((ROOT / file).read_bytes())
     def do_POST(self):
         if not self.same_origin(): return self.send(403, {'error': 'Cross-origin request rejected'})
-        if self.path == '/api/ai':
-            try:
-                body = self.body()
-                if body.get('ai_consent') is not True: return self.send(400, {'error': 'Consent to send this text to Vercel AI Gateway is required'})
-                return self.send(200, generate('linda', body.get('text')))
-            except GatewayError as error: return self.send(error.status, {'error': str(error)})
-            except (ValueError, TypeError) as error: return self.send(400, {'error': str(error)})
         if self.path != '/api/reports': return self.send(404, {'error': 'Not found'})
         try:
             body = self.body()
@@ -93,9 +85,10 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(summary, str) or not 10 <= len(summary.strip()) <= 2000: raise ValueError('Summary must be 10–2000 characters')
             if not isinstance(evidence, str) or len(evidence) > 3000: raise ValueError('Evidence notes must be at most 3000 characters')
             report_id, token = secrets.token_urlsafe(12), secrets.token_urlsafe(32)
+            created = datetime.now(timezone.utc).isoformat()
             with connect() as db:
-                db.execute('INSERT INTO reports VALUES (?,?,?,?,?,?)', (report_id, digest(token), category, summary.strip(), evidence.strip(), datetime.now(timezone.utc).isoformat()))
-            return self.send(201, {'id': report_id, 'access_key': token, 'plan': safety_plan(category), 'status': 'Saved privately. No organization has received this report.'})
+                db.execute('INSERT INTO reports VALUES (?,?,?,?,?,?)', (report_id, digest(token), category, summary.strip(), evidence.strip(), created))
+            return self.send(201, {'id': report_id, 'access_key': token, 'category': category, 'summary': summary.strip(), 'evidence': evidence.strip(), 'created': created, 'plan': safety_plan(category), 'status': 'Saved privately. No organization has received this report.'})
         except (ValueError, TypeError) as error: return self.send(400, {'error': str(error)})
     def do_DELETE(self):
         if not self.same_origin(): return self.send(403, {'error': 'Cross-origin request rejected'})

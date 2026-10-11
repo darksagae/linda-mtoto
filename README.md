@@ -39,8 +39,8 @@ The integration test checks consent, invalid data, unauthorized access, persiste
 
 MIT.
 
-## Vercel AI Gateway integration
+## UI design
 
-Optional AI drafts use the server-only Chat Completions endpoint. Set `AI_GATEWAY_MODEL` to a model from the live catalog and use `AI_GATEWAY_API_KEY` locally or `VERCEL_OIDC_TOKEN` on Vercel. `.env.example` documents configuration; the Python server reads exported environment variables and does not automatically load .env files.
+Editable desktop reporting, lookup, toolkit and mobile screens: [Linda Mtoto in Figma](https://www.figma.com/design/CjkiC9g8f6JCvkXbJzQI4Z). The app follows its cream/green palette, form cards, navigation and privacy guide. System fonts keep the app self-contained.
 
-Text is sent only after explicit consent. Use fictional examples; saved reports are never sent automatically. Output is validated and labeled AI-generated. No live generation has been verified without project credentials. Add authenticated access and rate limiting before exposing this endpoint publicly.
+AI forms, providers and endpoints have been removed. Safety steps are fixed, category-based guidance. Export includes the notes immediately after creation; it never includes the access key.

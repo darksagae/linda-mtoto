@@ -28,6 +28,8 @@ class ReportingTest(unittest.TestCase):
         self.assertEqual(self.request('/api/reports','POST',body,origin='https://evil.example')[0],403)
         body['category']=[];self.assertEqual(self.request('/api/reports','POST',body)[0],400);body['category']='harassment'
         code,report=self.request('/api/reports','POST',body);self.assertEqual(code,201)
+        self.assertEqual(report['summary'],body['summary']);self.assertEqual(report['evidence'],body['evidence']);self.assertIn('created',report)
+        self.assertEqual(self.request('/api/ai','POST',{})[0],404)
         path='/api/reports/'+report['id'];key=report['access_key']
         self.assertEqual(self.request(path)[0],404)
         self.assertEqual(self.request(path,key='wrong')[0],404)
