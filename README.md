@@ -11,7 +11,7 @@ Built for UCC Testbed, SafeTech HackLab and Code for Humanity.
 - **Personal safety plan:** transparent rules turn the person's answers into ordered steps. Steps can be ticked off, and progress is saved.
 - **Notes over time:** a timeline of encrypted follow-up notes.
 - **Download or delete:** a plain-text copy (never including the key), or permanent deletion of the report, plan and notes.
-- **Safety toolkit:** six practical guides covering threats and sextortion, account security, evidence, blocking and reporting, talking to someone, and wellbeing.
+- **Safety tips:** six practical guides covering threats and sextortion, account security, evidence, blocking and reporting, talking to someone, and wellbeing.
 - **Quick exit:** a button in every header, plus pressing Esc twice. It replaces the page with a neutral site.
 
 ## Privacy and security model

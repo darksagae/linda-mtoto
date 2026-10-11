@@ -1,9 +1,8 @@
-import { ArrowRight, Ban, HeartHandshake, KeyRound, NotebookPen, ShieldAlert, Sun, type LucideIcon } from 'lucide-react'
+import { Ban, HeartHandshake, KeyRound, NotebookPen, ShieldAlert, Sun, type LucideIcon } from 'lucide-react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Safety toolkit',
+  title: 'Safety tips',
   description: 'Practical, step-by-step guides for staying safe online and getting support.',
 }
 
@@ -107,17 +106,9 @@ const GUIDES: Guide[] = [
 export default function ToolkitPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-16">
-      <header className="max-w-2xl">
-        <span className="eyebrow">Safety toolkit</span>
-        <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-          Small steps. More control.
-        </h1>
-        <p className="mt-3 text-lg text-ink-soft">
-          Practical guides you can use right now — no report needed. Read them in any order.
-        </p>
-      </header>
+      <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Safety tips</h1>
 
-      <div className="mt-12 grid items-start gap-10 lg:grid-cols-[16rem_1fr]">
+      <div className="mt-8 grid items-start gap-10 lg:grid-cols-[16rem_1fr]">
         <nav aria-label="Guides" className="lg:sticky lg:top-28">
           <ul className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">
             {GUIDES.map(({ id, title, icon: Icon }) => (
@@ -166,16 +157,6 @@ export default function ToolkitPage() {
               )}
             </section>
           ))}
-
-          <div className="flex flex-col items-start gap-5 rounded-(--radius-card) bg-iris p-8 text-on-iris sm:flex-row sm:items-center sm:justify-between sm:p-10">
-            <div>
-              <h2 className="font-display text-2xl font-semibold">Ready to write it down?</h2>
-              <p className="mt-1 opacity-85">Get a personal safety plan you can come back to.</p>
-            </div>
-            <Link href="/report" className="btn shrink-0 bg-surface text-ink hover:bg-paper">
-              Make a private report <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
-          </div>
         </div>
       </div>
     </div>
