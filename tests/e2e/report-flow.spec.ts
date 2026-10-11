@@ -2,10 +2,6 @@ import { expect, test } from '@playwright/test'
 
 test('a young person can report, follow their plan, reopen and delete', async ({ page }) => {
   await page.goto('/')
-  await page
-    .getByRole('link', { name: /Make a private report/ })
-    .first()
-    .click()
 
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Choose the option')

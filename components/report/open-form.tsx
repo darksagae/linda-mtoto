@@ -100,7 +100,7 @@ export function OpenReport() {
         </button>
         <p className="mt-6 text-sm text-ink-soft">
           Lost your key? It can’t be recovered — that keeps your report private.{' '}
-          <Link href="/report" className="font-semibold text-iris hover:underline">
+          <Link href="/" className="font-semibold text-iris hover:underline">
             Make a new report
           </Link>
         </p>
