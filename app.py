@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 import hashlib, json, os, secrets, sqlite3
+from gateway import generate, GatewayError
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.getenv('LINDA_DB', str(ROOT / 'data' / 'reports.sqlite3')))
@@ -76,6 +77,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write((ROOT / file).read_bytes())
     def do_POST(self):
         if not self.same_origin(): return self.send(403, {'error': 'Cross-origin request rejected'})
+        if self.path == '/api/ai':
+            try:
+                body = self.body()
+                if body.get('ai_consent') is not True: return self.send(400, {'error': 'Consent to send this text to Vercel AI Gateway is required'})
+                return self.send(200, generate('linda', body.get('text')))
+            except GatewayError as error: return self.send(error.status, {'error': str(error)})
+            except (ValueError, TypeError) as error: return self.send(400, {'error': str(error)})
         if self.path != '/api/reports': return self.send(404, {'error': 'Not found'})
         try:
             body = self.body()
